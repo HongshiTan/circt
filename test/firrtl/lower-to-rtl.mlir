@@ -3,7 +3,7 @@
 module attributes {firrtl.mainModule = "Simple"} {
 
   // CHECK-LABEL: rtl.module @Simple
-  rtl.module @Simple(%in1: i4, %in2: i2, %in3: i8) -> (i4 {rtl.name = "out4"}) {
+  rtl.module @Simple(%in1: i4, %in2: i2, %in3: i8) -> (%out4: i4) {
     %in1c = firrtl.stdIntCast %in1 : (i4) -> !firrtl.uint<4>
     %in2c = firrtl.stdIntCast %in2 : (i2) -> !firrtl.uint<2>
     %in3c = firrtl.stdIntCast %in3 : (i8) -> !firrtl.sint<8>
@@ -38,6 +38,9 @@ module attributes {firrtl.mainModule = "Simple"} {
 
     // CHECK: rtl.and [[XOR]]
     %and = firrtl.and %5, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<4>
+
+    // CHECK: rtl.or [[XOR]]
+    %or = firrtl.or %5, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<4>
 
     // CHECK: [[CONCAT1:%.+]] = rtl.concat [[PADRES2]], [[XOR]] : (i4, i4) -> i8
     %6 = firrtl.cat %4, %5 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<8>
@@ -100,20 +103,22 @@ module attributes {firrtl.mainModule = "Simple"} {
 
     // CHECK-NEXT: [[ZEXTC1:%.+]] = rtl.zext [[CONCAT1]] : (i8) -> i12
     // CHECK-NEXT: [[ZEXT2:%.+]] = rtl.zext [[SUB]] : (i4) -> i12
-    // CHECK-NEXT: [[VAL18:%.+]] = rtl.mul [[ZEXTC1]], [[ZEXT2]] : i12
+    // CHECK-NEXT: [[VAL18:%.+]] = rtl.mul  [[ZEXTC1]], [[ZEXT2]] : i12
     %18 = firrtl.mul %6, %2 : (!firrtl.uint<8>, !firrtl.uint<4>) -> !firrtl.uint<12>
 
     // CHECK-NEXT: [[IN3SEXT:%.+]] = rtl.sext %in3 : (i8) -> i9
     // CHECK-NEXT: [[PADRESSEXT:%.+]] = rtl.sext [[PADRES]] : (i3) -> i9
-    // CHECK-NEXT: = rtl.div [[IN3SEXT]], [[PADRESSEXT]] : i9
+    // CHECK-NEXT: = rtl.divs [[IN3SEXT]], [[PADRESSEXT]] : i9
     %19 = firrtl.div %in3c, %3 : (!firrtl.sint<8>, !firrtl.sint<3>) -> !firrtl.sint<9>
 
-    // CHECK-NEXT: [[IN3TRUNC:%.+]] = rtl.extract %in3 from 0 : (i8) -> i3
-    // CHECK-NEXT: = rtl.mod [[IN3TRUNC]], [[PADRES]] : i3
+    // CHECK-NEXT: [[IN3EX:%.+]] = rtl.sext [[PADRES]] : (i3) -> i8
+    // CHECK-NEXT: [[MOD1:%.+]] = rtl.mods %in3, [[IN3EX]] : i8
+    // CHECK-NEXT: = rtl.extract [[MOD1]] from 0 : (i8) -> i3
     %20 = firrtl.rem %in3c, %3 : (!firrtl.sint<8>, !firrtl.sint<3>) -> !firrtl.sint<3>
 
-    // CHECK-NEXT: [[IN3TRUNC:%.+]] = rtl.extract %in3 from 0 : (i8) -> i3
-    // CHECK-NEXT: = rtl.mod [[PADRES]], [[IN3TRUNC]] : i3
+    // CHECK-NEXT: [[IN4EX:%.+]] = rtl.sext [[PADRES]] : (i3) -> i8
+    // CHECK-NEXT: [[MOD2:%.+]] = rtl.mods [[IN4EX]], %in3 : i8
+    // CHECK-NEXT: = rtl.extract [[MOD2]] from 0 : (i8) -> i3
     %21 = firrtl.rem %3, %in3c : (!firrtl.sint<3>, !firrtl.sint<8>) -> !firrtl.sint<3>
 
     // CHECK-NEXT: [[WIRE:%n1]] = rtl.wire : i2
@@ -126,6 +131,9 @@ module attributes {firrtl.mainModule = "Simple"} {
     // CHECK-NEXT: %false_{{.*}} = rtl.constant(false) : i1
     // CHECK-NEXT: [[CVT:%.+]] = rtl.concat %false_{{.*}}, %in2 : (i1, i2) -> i3
     %23 = firrtl.cvt %22 : (!firrtl.uint<2>) -> !firrtl.sint<3>
+
+    // Will be dropped, here because this triggered a crash
+    %s23 = firrtl.cvt %in3c : (!firrtl.sint<8>) -> !firrtl.sint<8>
 
     // CHECK-NEXT: %c-1_i3 = rtl.constant(-1 : i3) : i3
     // CHECK-NEXT: [[XOR:%.+]] = rtl.xor [[CVT]], %c-1_i3 : i3
@@ -148,12 +156,25 @@ module attributes {firrtl.mainModule = "Simple"} {
     %28 = firrtl.andr %27 : (!firrtl.uint<12>) -> !firrtl.uint<1>
 
     // CHECK-NEXT: = rtl.extract [[VAL18]] from 0 : (i12) -> i3
-    // CHECK-NEXT: = rtl.shr [[XOR]], {{.*}} : i3
+    // CHECK-NEXT: = rtl.shru [[XOR]], {{.*}} : i3
     %29 = firrtl.dshr %24, %18 : (!firrtl.uint<3>, !firrtl.uint<12>) -> !firrtl.uint<3>
 
     // CHECK-NEXT: = rtl.zext %2 : (i3) -> i8
     // CHECK-NEXT: = rtl.shl %in3, {{.*}} : i8
     %30 = firrtl.dshl %in3c, %3 : (!firrtl.sint<8>, !firrtl.sint<3>) -> !firrtl.sint<8>
+
+    // CHECK-NEXT: rtl.icmp "ule" {{.*}}, {{.*}} : i4
+    %41 = firrtl.leq %in1c, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<1>
+    // CHECK-NEXT: rtl.icmp "ult" {{.*}}, {{.*}} : i4
+    %42 = firrtl.lt %in1c, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<1>
+    // CHECK-NEXT: rtl.icmp "uge" {{.*}}, {{.*}} : i4
+    %43 = firrtl.geq %in1c, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<1>
+    // CHECK-NEXT: rtl.icmp "ugt" {{.*}}, {{.*}} : i4
+    %44 = firrtl.gt %in1c, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<1>
+    // CHECK-NEXT: rtl.icmp "eq" {{.*}}, {{.*}} : i4
+    %45 = firrtl.eq %in1c, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<1>
+    // CHECK-NEXT: rtl.icmp "ne" {{.*}}, {{.*}} : i4
+    %46 = firrtl.neq %in1c, %4 : (!firrtl.uint<4>, !firrtl.uint<4>) -> !firrtl.uint<1>
 
     // CHECK-NEXT: rtl.output %tmp3 : i4
     rtl.output %tmp3 : i4
